@@ -1,0 +1,80 @@
+name: Daily LinkedIn Article
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install google-genai
+
+      - name: Create Script
+        run: |
+          mkdir -p scripts
+          cat > scripts/generate.py << 'EOF'
+          import os
+          from datetime import date
+          from google import genai
+
+          client = genai.Client(
+              api_key=os.environ["GEMINI_API_KEY"]
+          )
+
+          prompt = """
+          Write a professional LinkedIn article about AI,
+          Cybersecurity, Programming, Student Growth,
+          IIT internships, or Technology Trends.
+
+          Length: 500-700 words
+          Include:
+          - Title
+          - Introduction
+          - Key Learnings
+          - Conclusion
+          - Engagement Question
+          """
+
+          response = client.models.generate_content(
+              model="gemini-2.5-flash",
+              contents=prompt
+          )
+
+          os.makedirs("articles", exist_ok=True)
+
+          filename = f"articles/{date.today()}.md"
+
+          with open(filename, "w", encoding="utf-8") as f:
+              f.write(response.text)
+
+          print("Article created:", filename)
+          EOF
+
+      - name: Generate Article
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/generate.py
+
+      - name: Commit Article
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Daily LinkedIn article" || echo "Nothing to commit"
+          git push
